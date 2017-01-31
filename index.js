@@ -5,6 +5,10 @@ var convert = require('xml-js');
 var stream = require('stream');
 var util = require('util');
 
+function consolelog(data) {
+    console.log(util.inspect(data, {showHidden: false, depth: null}));
+}
+
 function getrangedata(rangeobj) {
     var range = {};
     if(rangeobj["a:rPr"]["a:latin"]) range.font = rangeobj["a:rPr"]["a:latin"]._attributes.typeface;
@@ -73,22 +77,19 @@ function getshapedata(shapeobj) {
     // get some attributes from the non visible shape properties object
     var shapeattributes = shapeobj["p:nvSpPr"]["p:cNvPr"]._attributes;
     // add some more attributes
-    if(shapeattributes,shapeobj["p:nvSpPr"]["p:nvPr"]["p:ph"]) Object.assign(shapeattributes,shapeobj["p:nvSpPr"]["p:nvPr"]["p:ph"]._attributes);
+    if(shapeattributes,shapeobj["p:nvSpPr"]["p:nvPr"]["p:ph"]) {
+        Object.assign(shapeattributes,shapeobj["p:nvSpPr"]["p:nvPr"]["p:ph"]._attributes);
+    }
+    if(shapeattributes,shapeobj["p:spPr"]["a:xFrm"]) {
+        Object.assign(shapeattributes,shapeobj["p:spPr"]["a:xfrm"]["a:off"]._attributes);
+        Object.assign(shapeattributes,shapeobj["p:spPr"]["a:xfrm"]["a:ext"]._attributes);
+    }    
     shape.attributes = shapeattributes;        
     // see if there is a text body in this shape
     if(shapeobj["p:txBody"]) {
         shape.textbodydata = gettextbodydata(shapeobj["p:txBody"]);
     }
     return shape;
-}
-
-function getshapesdata(shapesobj) {
-    var shapes = [];
-    // walk through the shapes in the slide           
-    for(var i = 0; i < shapesobj.length; i++) {
-        shapes.push(getshapedata(shapesobj[i]));
-    }
-    return shapes;  
 }
 function getpicdata(picobj) {
     // empty pic object
@@ -101,20 +102,6 @@ function getpicdata(picobj) {
     pic.attributes = picattributes;
     return pic;       
 }
-function getpicsdata(picsobj) {
-    var pics = [];
-    if(Object.prototype.toString.call(picsobj) === '[object Array]') {
-        // walk through the shapes in the slide           
-        for(var i = 0; i < picsobj.length; i++) {
-            pics.push(getpicdata(picsobj[i]));
-        }
-    } 
-    else {
-        pics.push(getpicdata(picsobj));
-    }
-
-    return pics;  
-}
 function getslidedata(slideobj) {
     var slide = {};
     // the pptx slide.xml format starts with a xml declaration
@@ -123,8 +110,7 @@ function getslidedata(slideobj) {
     // this has a shape tree as a child which we're gonna access for our data (p:spTree)
     // the sptree has non visible and visible group shape properties, and a shapes array (p:sp)
     // that MIGHT be "all" we need to get the content from the slide file
-    slide.shapes = getshapesdata(slideobj['p:sld']['p:cSld']['p:spTree']['p:sp']);
-    if(slideobj['p:sld']['p:cSld']['p:spTree']['p:pic']) slide.pics = getpicsdata(slideobj['p:sld']['p:cSld']['p:spTree']['p:pic']);
+    slide.shapetree = getshapegroupdata(slideobj['p:sld']['p:cSld']['p:spTree']);
     return slide;
 }
 function getpresentationdata(presentationobj) {
@@ -134,12 +120,65 @@ function getpresentationdata(presentationobj) {
     return presentationdata;
     //console.log(util.inspect(presentationobj, {showHidden: false, depth: null}));
 }
+// dit was eerst de functie om door een shapetree heen te lopen, maar aangezien een shapegroup precies hetzelfde opgebouwd is, en bovendien zelf ook weer shapegroups kan bevatten
+// hiervan een recursieve algemene functie gemaakt om door shapegroups (waarvan de root shapetree is) te lopen.
+function getshapegroupdata(shapegroupobj) {
+    var shapegroupdata = {};
+    var shapegroups = [];
+    var shapes = [];  
+    var pics = [];
+    if(shapegroupobj["p:grpSp"]) {
+        if(Object.prototype.toString.call(shapegroupobj["p:grpSp"]) === '[object Array]') {
+            for(var i = 0; i < shapegroupobj["p:grpSp"].length; i ++) {
+                shapegroups.push(getshapegroupdata(shapegroupobj["p:grpSp"][i]));
+            }
+        }
+        else {
+            shapegroups.push(getshapegroupdata(shapegroupobj["p:grpSp"]));
+        }
+    }
+    if(shapegroupobj["p:sp"]) {
+        if(Object.prototype.toString.call(shapegroupobj["p:sp"]) === '[object Array]') {
+            for(var i = 0; i < shapegroupobj["p:sp"].length; i ++) {
+                shapes.push(getshapedata(shapegroupobj["p:sp"][i]));
+            }
+        }
+        else {
+            shapes.push(getshapedata(shapegroupobj["p:sp"]));
+        }        
+    }
+    if(shapegroupobj['p:pic']) {
+        if(Object.prototype.toString.call(shapegroupobj["p:pic"]) === '[object Array]') {
+            for(var i = 0; i < shapegroupobj["p:pic"].length; i ++) {
+                pics.push(getpicdata(shapegroupobj["p:pic"][i]));
+            }
+        }
+        else {
+            pics.push(getpicdata(shapegroupobj["p:pic"]));
+        }         
+    }
+    shapegroupdata.shapegroups = shapegroups;
+    shapegroupdata.shapes = shapes;   
+    shapegroupdata.pics = pics;
+    return shapegroupdata; 
+}
+function getslidelayoutdata(slidelayoutobj) {
+    var slidelayoutdata = {};
+    slidelayoutdata.shapetree = getshapegroupdata(slidelayoutobj["p:sldLayout"]["p:cSld"]["p:spTree"]);
+
+    return slidelayoutdata;
+}
+function getslidereldata(sliderelobj) {
+
+}
 var slides = [];
 var presentationdata = {};
+var slidelayouts = [];
+var sliderels = [];
 //fs.createReadStream('SlimmerIQuiz_voorronde_en_antwoorden.pptx')
 var readstream = fs.createReadStream('Quiz.pptx')
     .on('end', function () {
-        //console.log(util.inspect(slides, {showHidden: false, depth: null}));
+        consolelog(slidelayouts);
     })
     .pipe(unzip.Parse())
     .on('entry', function (entry) {
@@ -147,6 +186,8 @@ var readstream = fs.createReadStream('Quiz.pptx')
     var type = entry.type; // 'Directory' or 'File' 
     var size = entry.size;
     var slidenr = 0;
+    var slidelayoutnr = 0;
+    var sliderelnr = 0;
     var filetype = '';
     // prepare var for storing slide content
     var contentbuffer = "";
@@ -169,6 +210,14 @@ var readstream = fs.createReadStream('Quiz.pptx')
             var presentationjs = convert.xml2js(contentbuffer, {compact: true, spaces: 4});
             presentationdata = getpresentationdata(presentationjs);
         }
+        if(filetype === "slidelayout") {
+            var slidelayoutjs = convert.xml2js(contentbuffer, {compact: true, spaces: 4});
+            slidelayouts.push({"id": slidelayoutnr, "data": getslidelayoutdata(slidelayoutjs)});
+        }
+        if(filetype === "sliderel") {
+            var slidereljs = convert.xml2js(contentbuffer, {compact: true, spaces: 4});
+            sliderels.push({"id": sliderelnr, "data": getslidereldata(slidereljs)});
+        }        
     };
     if(path.dirname(fileName) === 'ppt/slides') {
         // probably got a slide here. maybe some more checks?
@@ -182,8 +231,15 @@ var readstream = fs.createReadStream('Quiz.pptx')
     } else if(path.basename(fileName)=="presentation.xml") {
         filetype = 'presentationdata';
         entry.pipe(ws);
-    }
-    else {
+    } else if(path.dirname(fileName) === 'ppt/slideLayouts') {
+        filetype = 'slidelayout';
+        slidelayoutnr = parseInt(path.basename(fileName).match(/\d+/)[0]);    
+        entry.pipe(ws);
+    } else if(path.dirname(fileName) === 'ppt/slides/_rels') {
+        filetype = 'sliderel';
+        sliderelnr = parseInt(path.basename(fileName).match(/\d+/)[0]);    
+        entry.pipe(ws);
+    } else {
         entry.autodrain();
     }
 });
