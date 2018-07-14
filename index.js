@@ -139,8 +139,8 @@ function getshapegroupdata(shapegroupobj) {
     }
     if(shapegroupobj["p:sp"]) {
         if(Object.prototype.toString.call(shapegroupobj["p:sp"]) === '[object Array]') {
-            for(var i = 0; i < shapegroupobj["p:sp"].length; i ++) {
-                shapes.push(getshapedata(shapegroupobj["p:sp"][i]));
+            for(var j = 0; j < shapegroupobj["p:sp"].length; j ++) {
+                shapes.push(getshapedata(shapegroupobj["p:sp"][j]));
             }
         }
         else {
@@ -149,8 +149,8 @@ function getshapegroupdata(shapegroupobj) {
     }
     if(shapegroupobj['p:pic']) {
         if(Object.prototype.toString.call(shapegroupobj["p:pic"]) === '[object Array]') {
-            for(var i = 0; i < shapegroupobj["p:pic"].length; i ++) {
-                pics.push(getpicdata(shapegroupobj["p:pic"][i]));
+            for(var k = 0; k < shapegroupobj["p:pic"].length; k ++) {
+                pics.push(getpicdata(shapegroupobj["p:pic"][k]));
             }
         }
         else {
