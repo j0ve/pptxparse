@@ -4,7 +4,6 @@ var path = require('path');
 var convert = require('xml-js');
 var stream = require('stream');
 var util = require('util');
-// test comment
 function consolelog(data) {
     console.log(util.inspect(data, {showHidden: false, depth: null}));
 }
