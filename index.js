@@ -7,7 +7,7 @@ var util = require('util');
 function consolelog(data) {
     console.log(util.inspect(data, {showHidden: false, depth: null}));
 }
-
+// test
 function getrangedata(rangeobj) {
     var range = {};
     if(rangeobj["a:rPr"]["a:latin"]) range.font = rangeobj["a:rPr"]["a:latin"]._attributes.typeface;
